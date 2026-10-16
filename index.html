@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Vénus</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,600&family=Sora:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#171028;--s1:#221838;--s2:#2f2250;--tx:#f3ecff;--mu:#a99bc4;--ac:#e0559c;--ac2:#8f5bff;--gd:#ffcf70;color-scheme:dark}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;height:100dvh;font:15px/1.45 Sora,system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;border-radius:12px;padding:10px 14px;background:var(--ac);font-weight:600}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--gd);outline-offset:2px}
+input,textarea{width:100%;background:var(--s1);border:1px solid var(--s2);border-radius:12px;padding:11px 13px}
+small,.mu{color:var(--mu)}
+.logo{font:italic 600 28px Fraunces,Georgia,serif;margin:0;display:flex;align-items:center;gap:10px}
+.logo i{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff3c9,var(--gd) 45%,#e08a3c);box-shadow:0 0 18px #ffcf7088}
+.av{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:14px;background:hsl(var(--h) 45% 38%)}
+#auth{height:100dvh;display:grid;place-items:center;padding:20px}
+#af{width:min(380px,100%);display:grid;gap:12px}
+#af a{color:var(--gd);text-align:center}.err{color:#ff8fa8;margin:0;min-height:1.4em}
+#app{display:grid;grid-template-rows:1fr auto;height:100dvh}
+.pane{min-height:0;overflow:auto}
+#pChats{display:grid;grid-template-columns:340px 1fr;overflow:hidden}
+#list{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--s2)}
+#list>header{padding:16px;display:grid;gap:12px}
+#cl{overflow:auto;flex:1}
+.ci{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:none;border-radius:0;padding:12px 16px;font-weight:400}
+.ci:hover,.ci.on{background:var(--s1)}
+.ci span{min-width:0}.ci b,.ci small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chatMain{display:flex;flex-direction:column;min-height:0}
+#empty{margin:auto;color:var(--mu);padding:20px;text-align:center}
+#chat{display:flex;flex-direction:column;flex:1;min-height:0}
+#chat>header{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--s2)}
+#bk{display:none;background:var(--s2)}
+#ms{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:6px}
+.m{max-width:78%;padding:9px 13px;border-radius:18px 18px 18px 4px;background:var(--s2);word-wrap:break-word}
+.m.me{align-self:flex-end;border-radius:18px 18px 4px 18px;background:linear-gradient(135deg,var(--ac),var(--ac2))}
+.m small{display:block;font-size:11px;opacity:.75}.m img{max-width:100%;border-radius:12px;display:block;margin:4px 0}
+#sf{display:flex;gap:8px;padding:12px;border-top:1px solid var(--s2);align-items:center}
+.ib{flex:none;background:var(--s2);border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:600}
+#eph{background:var(--s2)}#eph.on{background:var(--gd);color:#2a1b00}
+#pFeed,#pMe{width:min(640px,100%);margin:0 auto;padding:16px}
+#pf,#pm{display:grid;gap:10px;margin-bottom:16px}
+article{display:flex;gap:12px;padding:14px 0;border-top:1px solid var(--s2)}
+article>div{min-width:0;flex:1}article p{margin:4px 0;white-space:pre-wrap}
+article img{max-width:100%;border-radius:14px}
+.lk{background:var(--s2);padding:6px 12px}.lk.on{background:var(--ac)}
+#nv{display:flex;border-top:1px solid var(--s2);background:var(--s1);padding-bottom:env(safe-area-inset-bottom)}
+#nv button{flex:1;background:none;border-radius:0;padding:14px;color:var(--mu)}#nv .on{color:var(--gd)}
+dialog{background:var(--s1);color:var(--tx);border:1px solid var(--s2);border-radius:18px;width:min(420px,92vw);padding:18px}
+dialog::backdrop{background:#000a}
+#sr label{display:flex;gap:10px;align-items:center;padding:8px 0}#sr input{width:auto}
+menu{display:flex;gap:8px;justify-content:flex-end;padding:0;margin:12px 0 0}
+@media(max-width:780px){
+#pChats{grid-template-columns:1fr}#list{border:0}#chatMain{display:none}
+#pChats.open #chatMain{display:flex}#pChats.open #list{display:none}#bk{display:block}}
+@media(prefers-reduced-motion:no-preference){.m{animation:in .15s ease-out}@keyframes in{from{opacity:0;transform:translateY(4px)}}}
+</style>
+</head>
+<body>
+<main id="auth" hidden>
+ <form id="af">
+  <h1 class="logo"><i></i>Vénus</h1>
+  <p class="mu" style="margin:0">Discutez, partagez, restez proches.</p>
+  <input id="un" placeholder="Nom d'utilisateur" autocomplete="username" hidden>
+  <input id="em" type="email" placeholder="Adresse e-mail" autocomplete="email" required>
+  <input id="pw" type="password" placeholder="Mot de passe (8 caractères minimum)" minlength="8" autocomplete="current-password" required>
+  <button id="ab">Se connecter</button>
+  <p id="ae" class="err" role="alert"></p>
+  <a href="#" id="as">Créer un compte</a>
+ </form>
+</main>
+
+<div id="app" hidden>
+ <section id="pChats" class="pane">
+  <aside id="list">
+   <header><h2 class="logo"><i></i>Vénus</h2><button id="nc">Nouvelle discussion</button></header>
+   <div id="cl"></div>
+  </aside>
+  <div id="chatMain">
+   <div id="empty">Choisissez une discussion ou démarrez-en une.</div>
+   <div id="chat" hidden>
+    <header><button id="bk" aria-label="Retour">←</button><b id="ct"></b></header>
+    <div id="ms"></div>
+    <form id="sf">
+     <label class="ib">+<input type="file" id="mf" accept="image/*" hidden></label>
+     <button type="button" id="eph" title="Le message disparaît après 24 h">24 h</button>
+     <input id="mt" placeholder="Écrire un message" autocomplete="off">
+     <button>Envoyer</button>
+    </form>
+   </div>
+  </div>
+ </section>
+ <section id="pFeed" class="pane" hidden>
+  <form id="pf">
+   <textarea id="pt" rows="3" placeholder="Quoi de neuf ?"></textarea>
+   <label class="ib" id="pl">Ajouter une photo<input type="file" id="pi" accept="image/*" hidden></label>
+   <button>Publier</button>
+  </form>
+  <div id="fd"></div>
+ </section>
+ <section id="pMe" class="pane" hidden>
+  <form id="pm">
+   <h2 style="margin:0">Mon profil</h2>
+   <small id="mu"></small>
+   <input id="dn" placeholder="Nom affiché" maxlength="40">
+   <button>Enregistrer</button>
+   <button type="button" id="lo" style="background:var(--s2)">Se déconnecter</button>
+  </form>
+ </section>
+ <nav id="nv">
+  <button data-t="pChats" class="on">Discussions</button>
+  <button data-t="pFeed">Fil</button>
+  <button data-t="pMe">Profil</button>
+ </nav>
+</div>
+
+<dialog id="dlg">
+ <form method="dialog">
+  <input id="sq" placeholder="Rechercher un nom d'utilisateur" autocomplete="off">
+  <div id="sr"></div>
+  <menu><button value="x" style="background:var(--s2)">Annuler</button><button type="button" id="go">Démarrer</button></menu>
+ </form>
+</dialog>
+
+<script>
+/* ====== CONFIGURATION : remplacez par les valeurs de votre projet Supabase ====== */
+const SB_URL = 'https://bxcypuwlrkztyfekxgkk.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4Y3lwdXdscmt6dHlmZWt4Z2trIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNDYzMzEsImV4cCI6MjEwNzcyMjMzMX0.4ieFPPgtY-4pFY56BgVSXypp5b7QaZmKFy-m5VPeyRM';
+/* ================================================================================ */
+const sb = supabase.createClient(SB_URL, SB_KEY);
+const $ = s => document.querySelector(s);
+const esc = s => (s ?? '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hue = s => [...s].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+const av = n => `<span class="av" style="--h:${hue(n || '?')}">${esc((n || '?').slice(0, 2).toUpperCase())}</span>`;
+const hm = d => new Date(d).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+const gone = m => m.expires_at && new Date(m.expires_at) < new Date();
+let me, prof, convs = [], cur, seen = new Set(), eph = false, signup = false;
+
+/* ---------- Connexion ---------- */
+$('#as').onclick = e => {
+  e.preventDefault(); signup = !signup;
+  $('#un').hidden = !signup; $('#un').required = signup;
+  $('#ab').textContent = signup ? 'Créer mon compte' : 'Se connecter';
+  $('#as').textContent = signup ? 'J\'ai déjà un compte' : 'Créer un compte';
+  $('#ae').textContent = '';
+};
+$('#af').onsubmit = async e => {
+  e.preventDefault(); $('#ae').textContent = '';
+  const em = $('#em').value, pw = $('#pw').value;
+  const r = signup
+    ? await sb.auth.signUp({email: em, password: pw, options: {data: {username: $('#un').value.trim().toLowerCase()}}})
+    : await sb.auth.signInWithPassword({email: em, password: pw});
+  if (r.error) $('#ae').textContent = r.error.message;
+  else if (signup && !r.data.session) $('#ae').textContent = 'Compte créé. Confirmez votre e-mail, puis connectez-vous.';
+};
+$('#lo').onclick = () => sb.auth.signOut();
+sb.auth.onAuthStateChange((_, s) => start(s?.user));
+sb.auth.getSession().then(({data}) => { if (!data.session) start(null); });
+
+async function start(u) {
+  if (u && me && me.id === u.id) return;
+  $('#auth').hidden = !!u; $('#app').hidden = !u;
+  if (!u) { me = null; cur = null; sb.removeAllChannels(); return; }
+  me = u;
+  prof = (await sb.from('profiles').select('*').eq('id', u.id).single()).data;
+  $('#dn').value = prof?.display_name || ''; $('#mu').textContent = '@' + (prof?.username || '');
+  sb.channel('live').on('postgres_changes', {event: 'INSERT', schema: 'public', table: 'messages'}, p => {
+    if (cur && p.new.conversation_id === cur.id) addMsg(p.new);
+    loadChats();
+  }).subscribe();
+  loadChats();
+}
+
+/* ---------- Navigation ---------- */
+$('#nv').onclick = e => {
+  const t = e.target.dataset.t; if (!t) return;
+  ['pChats', 'pFeed', 'pMe'].forEach(id => $('#' + id).hidden = id !== t);
+  document.querySelectorAll('#nv button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  if (t === 'pFeed') loadFeed();
+};
+
+/* ---------- Discussions ---------- */
+const nm = c => c.title || c.conversation_members.map(x => x.profiles).filter(p => p.id !== me.id).map(p => p.display_name || p.username).join(', ') || 'Discussion';
+const prev = c => !c.last ? 'Nouvelle discussion' : gone(c.last) ? 'Message éphémère expiré' : (c.last.body || 'Photo');
+
+async function loadChats() {
+  const {data} = await sb.from('conversation_members')
+    .select('conversations(id,title,is_group,conversation_members(profiles(id,username,display_name)))')
+    .eq('user_id', me.id);
+  convs = (data || []).map(r => r.conversations).filter(Boolean);
+  await Promise.all(convs.map(async c => {
+    const r = await sb.from('messages').select('body,image_url,created_at,expires_at')
+      .eq('conversation_id', c.id).order('created_at', {ascending: false}).limit(1);
+    c.last = r.data?.[0];
+  }));
+  convs.sort((a, b) => new Date(b.last?.created_at || 0) - new Date(a.last?.created_at || 0));
+  $('#cl').innerHTML = convs.map(c => `<button class="ci${cur && cur.id === c.id ? ' on' : ''}" data-id="${c.id}">${av(nm(c))}<span><b>${esc(nm(c))}</b><small>${esc(prev(c))}</small></span></button>`).join('')
+    || '<p class="mu" style="padding:16px">Aucune discussion pour le moment.</p>';
+}
+$('#cl').onclick = e => { const b = e.target.closest('.ci'); if (b) openChat(b.dataset.id); };
+$('#bk').onclick = () => { $('#pChats').classList.remove('open'); cur = null; loadChats(); };
+
+async function openChat(id) {
+  cur = convs.find(c => c.id === id); if (!cur) return;
+  seen = new Set(); $('#ms').innerHTML = '';
+  $('#ct').textContent = nm(cur); $('#empty').hidden = true; $('#chat').hidden = false;
+  $('#pChats').classList.add('open');
+  const {data} = await sb.from('messages').select('*').eq('conversation_id', id).order('created_at', {ascending: false}).limit(100);
+  (data || []).reverse().forEach(addMsg);
+  loadChats();
+}
+function addMsg(m) {
+  if (seen.has(m.id) || gone(m)) return; seen.add(m.id);
+  const mine = m.sender_id === me.id;
+  const who = cur.conversation_members.map(x => x.profiles).find(p => p.id === m.sender_id);
+  const d = document.createElement('div'); d.className = 'm' + (mine ? ' me' : '');
+  d.innerHTML = (!mine && cur.is_group ? `<small>${esc(who?.display_name || who?.username)}</small>` : '')
+    + (m.image_url ? `<img src="${esc(m.image_url)}" alt="Photo">` : '') + (m.body ? esc(m.body) : '')
+    + `<small>${hm(m.created_at)}${m.expires_at ? ' · éphémère' : ''}</small>`;
+  const box = $('#ms'); box.appendChild(d); box.scrollTop = box.scrollHeight;
+}
+$('#eph').onclick = () => { eph = !eph; $('#eph').classList.toggle('on', eph); };
+async function upload(f) {
+  const p = `${me.id}/${Date.now()}-${f.name.replace(/[^\w.]/g, '_')}`;
+  const u = await sb.storage.from('media').upload(p, f);
+  if (u.error) { alert(u.error.message); return null; }
+  return sb.storage.from('media').getPublicUrl(p).data.publicUrl;
+}
+$('#sf').onsubmit = async e => {
+  e.preventDefault();
+  const t = $('#mt').value.trim(), f = $('#mf').files[0];
+  if (!cur || (!t && !f)) return;
+  const url = f ? await upload(f) : null; if (f && !url) return;
+  $('#mt').value = ''; $('#mf').value = '';
+  const {error} = await sb.from('messages').insert({
+    conversation_id: cur.id, sender_id: me.id, body: t || null, image_url: url,
+    expires_at: eph ? new Date(Date.now() + 864e5).toISOString() : null
+  });
+  if (error) alert(error.message);
+};
+
+/* ---------- Nouvelle discussion / groupe ---------- */
+$('#nc').onclick = () => { $('#sq').value = ''; $('#sr').innerHTML = ''; $('#dlg').showModal(); };
+let tm;
+$('#sq').oninput = () => {
+  clearTimeout(tm);
+  tm = setTimeout(async () => {
+    const q = $('#sq').value.trim(); if (q.length < 2) { $('#sr').innerHTML = ''; return; }
+    const {data} = await sb.from('profiles').select('id,username,display_name')
+      .ilike('username', `%${q.replace(/[%_]/g, '')}%`).neq('id', me.id).limit(10);
+    $('#sr').innerHTML = (data || []).map(p => `<label><input type="checkbox" value="${p.id}">${av(p.display_name || p.username)}<span>${esc(p.display_name || p.username)}<br><small>@${esc(p.username)}</small></span></label>`).join('')
+      || '<p class="mu">Aucun utilisateur trouvé.</p>';
+  }, 250);
+};
+$('#go').onclick = async () => {
+  const ids = [...document.querySelectorAll('#sr input:checked')].map(i => i.value);
+  if (!ids.length) return;
+  const title = ids.length > 1 ? (prompt('Nom du groupe') || 'Groupe') : null;
+  const {data, error} = await sb.rpc('start_chat', {others: ids, title});
+  if (error) return alert(error.message);
+  $('#dlg').close(); await loadChats(); openChat(data);
+};
+
+/* ---------- Fil d'actualité ---------- */
+async function loadFeed() {
+  const {data} = await sb.from('posts')
+    .select('id,body,image_url,created_at,profiles(username,display_name),likes(user_id)')
+    .order('created_at', {ascending: false}).limit(50);
+  $('#fd').innerHTML = (data || []).map(p => {
+    const n = p.profiles.display_name || p.profiles.username, lk = p.likes.some(l => l.user_id === me.id);
+    return `<article>${av(n)}<div><b>${esc(n)}</b> <small>${new Date(p.created_at).toLocaleDateString('fr-FR')}</small><p>${esc(p.body)}</p>${p.image_url ? `<img src="${esc(p.image_url)}" alt="">` : ''}<button class="lk${lk ? ' on' : ''}" data-id="${p.id}" data-l="${lk ? 1 : 0}">♥ ${p.likes.length}</button></div></article>`;
+  }).join('') || '<p class="mu">Aucune publication. Écrivez la première.</p>';
+}
+$('#fd').onclick = async e => {
+  const b = e.target.closest('.lk'); if (!b) return;
+  if (b.dataset.l === '1') await sb.from('likes').delete().eq('post_id', b.dataset.id).eq('user_id', me.id);
+  else await sb.from('likes').insert({post_id: b.dataset.id, user_id: me.id});
+  loadFeed();
+};
+$('#pf').onsubmit = async e => {
+  e.preventDefault();
+  const t = $('#pt').value.trim(), f = $('#pi').files[0]; if (!t && !f) return;
+  const url = f ? await upload(f) : null; if (f && !url) return;
+  const {error} = await sb.from('posts').insert({author_id: me.id, body: t || null, image_url: url});
+  if (error) return alert(error.message);
+  $('#pt').value = ''; $('#pi').value = ''; loadFeed();
+};
+
+/* ---------- Profil ---------- */
+$('#pm').onsubmit = async e => {
+  e.preventDefault();
+  const {error} = await sb.from('profiles').update({display_name: $('#dn').value.trim() || null}).eq('id', me.id);
+  alert(error ? error.message : 'Profil enregistré');
+};
+</script>
+</body>
+</html>

@@ -54,6 +54,9 @@ dialog{background:var(--s1);color:var(--tx);border:1px solid var(--s2);border-ra
 dialog::backdrop{background:#000a}
 #sr label{display:flex;gap:10px;align-items:center;padding:8px 0}#sr input{width:auto}
 menu{display:flex;gap:8px;justify-content:flex-end;padding:0;margin:12px 0 0}
+audio{max-width:100%;height:36px}.cm{margin-top:6px}.cf{display:flex;gap:6px;margin-top:6px}.cf input{padding:7px 10px}.cf button{padding:7px 12px;background:var(--s2)}
+#st{display:flex;gap:12px;overflow:auto;align-items:center;padding-bottom:12px}.sb{background:none;padding:0;font-weight:400}.sb .av{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--gd)}
+#vo.on{background:#e5484d}#sv img{width:100%;border-radius:12px}
 @media(max-width:780px){
 #pChats{grid-template-columns:1fr}#list{border:0}#chatMain{display:none}
 #pChats.open #chatMain{display:flex}#pChats.open #list{display:none}#bk{display:block}}
@@ -87,6 +90,7 @@ menu{display:flex;gap:8px;justify-content:flex-end;padding:0;margin:12px 0 0}
     <div id="ms"></div>
     <form id="sf">
      <label class="ib">+<input type="file" id="mf" accept="image/*" hidden></label>
+     <button type="button" id="vo" class="ib" title="Message vocal">Micro</button>
      <button type="button" id="eph" title="Le message disparaît après 24 h">24 h</button>
      <input id="mt" placeholder="Écrire un message" autocomplete="off">
      <button>Envoyer</button>
@@ -95,6 +99,7 @@ menu{display:flex;gap:8px;justify-content:flex-end;padding:0;margin:12px 0 0}
   </div>
  </section>
  <section id="pFeed" class="pane" hidden>
+  <div id="st"><label class="ib">+ Story<input type="file" id="sa" accept="image/*" hidden></label><span id="sl" style="display:flex;gap:12px"></span></div>
   <form id="pf">
    <textarea id="pt" rows="3" placeholder="Quoi de neuf ?"></textarea>
    <label class="ib" id="pl">Ajouter une photo<input type="file" id="pi" accept="image/*" hidden></label>
@@ -117,6 +122,8 @@ menu{display:flex;gap:8px;justify-content:flex-end;padding:0;margin:12px 0 0}
   <button data-t="pMe">Profil</button>
  </nav>
 </div>
+
+<dialog id="sv"><img id="si" alt=""><p id="sc"></p></dialog>
 
 <dialog id="dlg">
  <form method="dialog">
@@ -169,8 +176,14 @@ async function start(u) {
   prof = (await sb.from('profiles').select('*').eq('id', u.id).single()).data;
   $('#dn').value = prof?.display_name || ''; $('#mu').textContent = '@' + (prof?.username || '');
   sb.channel('live').on('postgres_changes', {event: 'INSERT', schema: 'public', table: 'messages'}, p => {
-    if (cur && p.new.conversation_id === cur.id) addMsg(p.new);
+    if (cur && p.new.conversation_id === cur.id) { addMsg(p.new); if (p.new.sender_id !== me.id) markRead(); }
+    if (p.new.sender_id !== me.id && (document.hidden || !cur || cur.id !== p.new.conversation_id) && window.Notification && Notification.permission === 'granted')
+      new Notification('Vénus', {body: p.new.body || 'Nouveau message'});
     loadChats();
+  }).on('postgres_changes', {event: 'UPDATE', schema: 'public', table: 'conversation_members'}, p => {
+    const r = p.new; if (!cur || r.conversation_id !== cur.id || r.user_id === me.id) return;
+    const x = cur.conversation_members.find(y => y.user_id === r.user_id); if (x) x.last_read_at = r.last_read_at;
+    document.querySelectorAll('#ms .m.me').forEach(d => { if (vu(d.dataset.t)) d.querySelector('.vu').textContent = ' · Vu'; });
   }).subscribe();
   loadChats();
 }
@@ -178,6 +191,7 @@ async function start(u) {
 /* ---------- Navigation ---------- */
 $('#nv').onclick = e => {
   const t = e.target.dataset.t; if (!t) return;
+  if (window.Notification && Notification.permission === 'default') Notification.requestPermission();
   ['pChats', 'pFeed', 'pMe'].forEach(id => $('#' + id).hidden = id !== t);
   document.querySelectorAll('#nv button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
   if (t === 'pFeed') loadFeed();
@@ -189,7 +203,7 @@ const prev = c => !c.last ? 'Nouvelle discussion' : gone(c.last) ? 'Message éph
 
 async function loadChats() {
   const {data} = await sb.from('conversation_members')
-    .select('conversations(id,title,is_group,conversation_members(profiles(id,username,display_name)))')
+    .select('conversations(id,title,is_group,conversation_members(user_id,last_read_at,profiles(id,username,display_name)))')
     .eq('user_id', me.id);
   convs = (data || []).map(r => r.conversations).filter(Boolean);
   await Promise.all(convs.map(async c => {
@@ -208,7 +222,7 @@ async function openChat(id) {
   cur = convs.find(c => c.id === id); if (!cur) return;
   seen = new Set(); $('#ms').innerHTML = '';
   $('#ct').textContent = nm(cur); $('#empty').hidden = true; $('#chat').hidden = false;
-  $('#pChats').classList.add('open');
+  $('#pChats').classList.add('open'); markRead();
   const {data} = await sb.from('messages').select('*').eq('conversation_id', id).order('created_at', {ascending: false}).limit(100);
   (data || []).reverse().forEach(addMsg);
   loadChats();
@@ -217,10 +231,10 @@ function addMsg(m) {
   if (seen.has(m.id) || gone(m)) return; seen.add(m.id);
   const mine = m.sender_id === me.id;
   const who = cur.conversation_members.map(x => x.profiles).find(p => p.id === m.sender_id);
-  const d = document.createElement('div'); d.className = 'm' + (mine ? ' me' : '');
+  const d = document.createElement('div'); d.className = 'm' + (mine ? ' me' : ''); d.dataset.t = m.created_at;
   d.innerHTML = (!mine && cur.is_group ? `<small>${esc(who?.display_name || who?.username)}</small>` : '')
-    + (m.image_url ? `<img src="${esc(m.image_url)}" alt="Photo">` : '') + (m.body ? esc(m.body) : '')
-    + `<small>${hm(m.created_at)}${m.expires_at ? ' · éphémère' : ''}</small>`;
+    + (m.image_url ? `<img src="${esc(m.image_url)}" alt="Photo">` : '') + (m.audio_url ? `<audio controls src="${esc(m.audio_url)}"></audio>` : '') + (m.body ? esc(m.body) : '')
+    + `<small>${hm(m.created_at)}${m.expires_at ? ' · éphémère' : ''}<span class="vu">${mine && vu(m.created_at) ? ' · Vu' : ''}</span></small>`;
   const box = $('#ms'); box.appendChild(d); box.scrollTop = box.scrollHeight;
 }
 $('#eph').onclick = () => { eph = !eph; $('#eph').classList.toggle('on', eph); };
@@ -267,12 +281,13 @@ $('#go').onclick = async () => {
 
 /* ---------- Fil d'actualité ---------- */
 async function loadFeed() {
+  loadStories();
   const {data} = await sb.from('posts')
-    .select('id,body,image_url,created_at,profiles(username,display_name),likes(user_id)')
+    .select('id,body,image_url,created_at,profiles!author_id(username,display_name),likes(user_id),comments(id,body,profiles!author_id(username,display_name))')
     .order('created_at', {ascending: false}).limit(50);
   $('#fd').innerHTML = (data || []).map(p => {
     const n = p.profiles.display_name || p.profiles.username, lk = p.likes.some(l => l.user_id === me.id);
-    return `<article>${av(n)}<div><b>${esc(n)}</b> <small>${new Date(p.created_at).toLocaleDateString('fr-FR')}</small><p>${esc(p.body)}</p>${p.image_url ? `<img src="${esc(p.image_url)}" alt="">` : ''}<button class="lk${lk ? ' on' : ''}" data-id="${p.id}" data-l="${lk ? 1 : 0}">♥ ${p.likes.length}</button></div></article>`;
+    return `<article>${av(n)}<div><b>${esc(n)}</b> <small>${new Date(p.created_at).toLocaleDateString('fr-FR')}</small><p>${esc(p.body)}</p>${p.image_url ? `<img src="${esc(p.image_url)}" alt="">` : ''}<button class="lk${lk ? ' on' : ''}" data-id="${p.id}" data-l="${lk ? 1 : 0}">♥ ${p.likes.length}</button><div class="cm">${p.comments.map(c => `<small><b>${esc(c.profiles?.display_name || c.profiles?.username)}</b> ${esc(c.body)}</small>`).join('<br>')}</div><form class="cf" data-id="${p.id}"><input placeholder="Commenter" maxlength="300"><button>OK</button></form></div></article>`;
   }).join('') || '<p class="mu">Aucune publication. Écrivez la première.</p>';
 }
 $('#fd').onclick = async e => {
@@ -288,6 +303,58 @@ $('#pf').onsubmit = async e => {
   const {error} = await sb.from('posts').insert({author_id: me.id, body: t || null, image_url: url});
   if (error) return alert(error.message);
   $('#pt').value = ''; $('#pi').value = ''; loadFeed();
+};
+
+/* ---------- Accusés de lecture, vocaux, commentaires, stories ---------- */
+const vu = t => cur.conversation_members.some(x => x.user_id !== me.id && x.last_read_at && new Date(x.last_read_at) >= new Date(t));
+const markRead = () => { if (cur) sb.from('conversation_members').update({last_read_at: new Date().toISOString()}).eq('conversation_id', cur.id).eq('user_id', me.id).then(() => {}); };
+
+let rec, chunks;
+$('#vo').onclick = async () => {
+  if (rec) { rec.stop(); return; }
+  if (!cur) return;
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({audio: true});
+    rec = new MediaRecorder(st); chunks = [];
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = async () => {
+      st.getTracks().forEach(t => t.stop()); $('#vo').classList.remove('on');
+      const b = new Blob(chunks, {type: rec.mimeType}); rec = null;
+      const url = await upload(new File([b], 'vocal.' + (b.type.includes('mp4') ? 'm4a' : 'webm'), {type: b.type}));
+      if (!url) return;
+      const {error} = await sb.from('messages').insert({conversation_id: cur.id, sender_id: me.id, audio_url: url, expires_at: eph ? new Date(Date.now() + 864e5).toISOString() : null});
+      if (error) alert(error.message);
+    };
+    rec.start(); $('#vo').classList.add('on');
+  } catch { alert('Micro indisponible : autorisez-le dans le navigateur.'); }
+};
+
+$('#fd').addEventListener('submit', async e => {
+  e.preventDefault();
+  const i = e.target.querySelector('input'), t = i.value.trim(); if (!t) return;
+  const {error} = await sb.from('comments').insert({post_id: e.target.dataset.id, author_id: me.id, body: t});
+  if (error) return alert(error.message);
+  loadFeed();
+});
+
+let stories = [];
+async function loadStories() {
+  const {data} = await sb.from('stories').select('id,body,image_url,profiles!author_id(username,display_name)')
+    .gt('created_at', new Date(Date.now() - 864e5).toISOString()).order('created_at');
+  stories = data || [];
+  $('#sl').innerHTML = stories.map((s, i) => { const n = s.profiles.display_name || s.profiles.username; return `<button class="sb" data-i="${i}">${av(n)}<small>${esc(n.slice(0, 8))}</small></button>`; }).join('');
+}
+$('#sl').onclick = e => {
+  const b = e.target.closest('.sb'); if (!b) return;
+  const s = stories[b.dataset.i]; $('#si').src = s.image_url; $('#sc').textContent = s.body || ''; $('#sv').showModal();
+};
+$('#sv').onclick = () => $('#sv').close();
+$('#sa').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const url = await upload(f); e.target.value = ''; if (!url) return;
+  const {error} = await sb.from('stories').insert({author_id: me.id, image_url: url, body: prompt('Légende (facultatif)') || null});
+  if (error) alert(error.message);
+  loadStories();
 };
 
 /* ---------- Profil ---------- */
